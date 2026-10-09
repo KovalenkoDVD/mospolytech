@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Email Validator (Вариант 17)</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 40px; background: #f4f4f9; color: #333; }
+        .container { max-width: 900px; margin: auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        h1 { margin-top: 0; color: #2c3e50; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .controls { display: flex; gap: 15px; margin: 25px 0; }
+        input { padding: 12px; border: 1px solid #ccc; border-radius: 6px; flex-grow: 1; font-size: 16px; }
+        button { padding: 12px 20px; border: none; background: #3498db; color: white; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; transition: background 0.3s; }
+        button:hover { background: #2980b9; }
+        .btn-success { background: #2ecc71; }
+        .btn-success:hover { background: #27ae60; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background: #34495e; color: white; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .valid { color: #27ae60; font-weight: bold; }
+        .invalid { color: #e74c3c; font-weight: bold; }
+        .mx-data { font-family: monospace; font-size: 12px; color: #555; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Проверка контрагентов (Вариант 17: Валидация Email)</h1>
+        
+        <div class="controls">
+            <input type="email" id="emailInput" placeholder="Введите email для проверки (например, google@google.com)">
+            <button onclick="verifyEmail()">Проверить Email</button>
+            <button class="btn-success" onclick="loadEmails()">Обновить список</button>
+        </div>
+
+        <h2>Список проверенных контрагентов</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th width="5%">ID</th>
+                    <th width="25%">Email</th>
+                    <th width="10%">Статус</th>
+                    <th width="40%">MX Записи (Почтовые серверы)</th>
+                    <th width="20%">Дата проверки</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody">
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3000/api';
+
+        async function verifyEmail() {
+            const email = document.getElementById('emailInput').value.trim();
+            if (!email) return alert('Пожалуйста, введите email!');
+            
+            const btn = document.querySelector('button');
+            btn.disabled = true;
+            btn.innerText = 'Проверка...';
+            
+            try {
+                const res = await fetch(`${API_URL}/verify`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+                
+                if (!res.ok) throw new Error('Ошибка сервера');
+                
+                const data = await res.json();
+                document.getElementById('emailInput').value = '';
+                loadEmails();
+            } catch (e) {
+                console.error(e);
+                alert('Произошла ошибка при обращении к API.');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Проверить Email';
+            }
+        }
+
+        async function loadEmails() {
+            try {
+                const res = await fetch(`${API_URL}/emails`);
+                const data = await res.json();
+                const tbody = document.getElementById('tableBody');
+                tbody.innerHTML = '';
+                
+                data.forEach(row => {
+                    const tr = document.createElement('tr');
+                    const date = new Date(row.checked_at).toLocaleString('ru-RU');
+                    const status = row.is_valid ? '<span class="valid">Валиден</span>' : '<span class="invalid">Недействителен</span>';
+                    
+                    let mx = 'Нет данных';
+                    if (row.mx_records) {
+                        try {
+                            const parsed = JSON.parse(row.mx_records);
+                            mx = parsed.map(r => `${r.exchange} (prio: ${r.priority})`).join('<br>');
+                        } catch(e) { mx = row.mx_records; }
+                    }
+                    
+                    tr.innerHTML = `
+                        <td>${row.id}</td>
+                        <td><strong>${row.email}</strong></td>
+                        <td>${status}</td>
+                        <td class="mx-data">${mx}</td>
+                        <td>${date}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (e) {
+                console.error(e);
+                document.getElementById('tableBody').innerHTML = '<tr><td colspan="5" style="text-align:center; color:red;">Ошибка загрузки данных. Убедитесь, что Backend запущен.</td></tr>';
+            }
+        }
+
+        // Initial load
+        loadEmails();
+    </script>
+</body>
+</html>
